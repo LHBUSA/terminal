@@ -4,6 +4,7 @@
 // PBE probabilities only from the desk's published `pbe`. Only ids (watchlist, pins) are kept in localStorage.
 import { fmtCents, fmtPct, ageText, ruleTermsView, keyDifferences, BADGES, moves, WINDOWS, fmtMove, participantMedia, CROSS_TOOLTIP, hubStats } from './core.js';
 import * as M from './model.js';
+import { createSync } from './sync.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -25,6 +26,7 @@ const store = {
 };
 const params = new URLSearchParams(location.search);
 const S = {
+  sync: { phase: 'loading', ready: false, pending: 0 },
   member: null, scope: M.SCOPES.includes(params.get('scope')) ? params.get('scope') : (M.SCOPES.includes(store.get('pbe_terminal_scope')) ? store.get('pbe_terminal_scope') : 'sports'),
   view: ['board', 'watch', 'pins', 'alerts'].includes(params.get('view')) ? params.get('view') : 'board',
   filter: 'all', sort: 'priority', q: '',
@@ -38,13 +40,16 @@ const S = {
   health: { state: 'CONNECTING', text: '' }, lastHealth: 'CONNECTING', lastOkAt: 0, lastStatus: null,
   online: navigator.onLine !== false, busy: false, seq: M.sequencer(), ctl: new Map(), lastHtml: ''
 };
-{
-  const v2 = M.parseIds(store.get('pbe_terminal_watch_v2'), M.MAX_WATCH);
-  const v1 = v2.length ? [] : M.migrateV1(M.parseIds(store.get('pbe_terminal_watchlist_v1'), M.MAX_WATCH));
-  S.watch = new Set([...v2, ...v1].slice(0, M.MAX_WATCH));
-  S.pins = M.parseIds(store.get('pbe_terminal_pins_v1'), M.MAX_PINS);
+// Watchlist + pins are an All Access account workspace (sync.js -> /api/workspace -> auth Worker -> identity Supabase).
+// S.watch / S.pins mirror the sync view; every tap is an operation the sync engine saves, merges and retries.
+let synced = null;
+function onSync(st) {
+  S.sync = st;
+  S.watch = new Set(st.watch); S.pins = [...st.pins];
+  if (synced && S.member) paint();
 }
-const saveIds = () => { store.set('pbe_terminal_watch_v2', JSON.stringify([...S.watch])); store.set('pbe_terminal_pins_v1', JSON.stringify(S.pins)); };
+const sync = createSync({ fetchImpl: (u, i) => fetch(u, i), storage: (() => { try { return localStorage; } catch { return { getItem: () => null, setItem() {}, removeItem() {}, key: () => null, length: 0 }; } })(), onChange: onSync });
+synced = true;
 
 // ------------------------------------------------------------------ network
 async function getJson(url, ch) {
@@ -257,7 +262,7 @@ function kpis(events) {
     + k('Verified pairs', pairs, `${h.comparable} events · aligned quotes`)
     + k('Largest gap', h.best ? `${h.best.best_gap.toFixed(1)} pts` : '—', h.best ? esc(`${best?.label || ''} · ${h.best.title}`) : 'no verified gap now')
     + k('PBE modeled', modeled, modeled ? 'published same-contract models' : 'no published model in scope')
-    + k('Watching', S.watch.size, `${S.pins.length}/${M.MAX_PINS} pinned · ${S.alerts.length} alerts`);
+    + k('Watching', S.sync.ready || S.sync.pending ? S.watch.size : '…', `${S.pins.length}/${M.MAX_PINS} pinned · ${S.alerts.length} alerts`);
 }
 
 function laneNotes(d) {
@@ -282,6 +287,7 @@ function boardView() {
   return laneNotes(d) + body;
 }
 function watchView() {
+  if (!S.sync.ready && !S.watch.size) return syncEmpty('watchlist');
   if (!S.watch.size) return '<div class="empty"><b>Your watchlist is empty</b>Tap ☆ on any outcome. Watched outcomes raise in-app alerts on real moves, model changes and start times.</div>';
   const all = allEvents();
   const groups = new Map();
@@ -292,6 +298,7 @@ function watchView() {
     ${missing.length ? `<div class="note" style="margin-top:12px">${missing.length} watched outcome${missing.length > 1 ? 's are' : ' is'} not on the latest desk read (market closed, settled or lane delayed). <button class="btn ghost" data-act="prune">Remove them</button></div>` : ''}`;
 }
 function pinsView() {
+  if (!S.sync.ready && !S.pins.length) return syncEmpty('pinned outcomes');
   if (!S.pins.length) return '<div class="empty"><b>Nothing pinned yet</b>Tap ⧉ on up to four outcomes, from any sport or prediction market, to follow them side by side with their stored price history.</div>';
   return `<div class="pins">${S.pins.map((k) => {
     const { e, c } = findContract(k);
@@ -426,12 +433,43 @@ function closeDrawer() {
 }
 function paintDrawer() { if (S.open && !$('#drawer').hidden) { const html = inspector(); const b = $('#dBody'); if (b.dataset.html !== html) { b.innerHTML = html; b.dataset.html = html; } } }
 
+// ------------------------------------------------------------------ sync status
+function syncEmpty(what) {
+  return S.sync.phase === 'loading'
+    ? `<div class="empty"><b>Loading your saved markets…</b>Your ${what} follow your All Access account across devices.</div>`
+    : `<div class="empty"><b>Saved markets unavailable right now</b>Your ${what} are stored with your account and will appear when sync reconnects. <button class="btn ghost" data-act="sync-retry">Retry</button></div>`;
+}
+function syncText() {
+  const st = S.sync;
+  const when = st.updated_at ? ` · ${hhmm(st.updated_at)}` : '';
+  if (st.phase === 'loading') return ['busy', 'Loading workspace…'];
+  if (st.phase === 'saving') return ['busy', 'Saving…'];
+  if (st.phase === 'synced') return ['ok', st.revision ? `Synced · rev ${st.revision}${when}` : 'Synced · nothing saved yet'];
+  if (st.phase === 'pending') return ['warn', `Saved on this device · sync pending (${st.pending})`];
+  if (st.phase === 'unavailable') return ['warn', 'Sync unavailable · retrying'];
+  return ['', ''];
+}
+function paintSync() {
+  const el = $('#sync');
+  if (!el) return;
+  const [tone, text] = syncText();
+  el.hidden = !text;
+  el.dataset.tone = tone;
+  const retry = S.sync.phase === 'pending' || S.sync.phase === 'unavailable';
+  const html = `<i aria-hidden="true"></i><span>${esc(text)}</span>${retry ? '<button class="sync-retry" data-act="sync-retry">Retry</button>' : ''}${S.sync.migrated && S.sync.phase === 'synced' && !S.migratedShown ? `<em>Added ${S.sync.migrated} saved market${S.sync.migrated > 1 ? 's' : ''} from this device</em>` : ''}`;
+  if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+  if (S.sync.migrated && S.sync.phase === 'synced' && !S.migratedShown && !S.migratedTimer) S.migratedTimer = setTimeout(() => { S.migratedShown = true; paintSync(); }, 20e3);
+  el.title = S.sync.lastSyncAt ? `Workspace saved to your All Access account. Last confirmed ${new Date(S.sync.lastSyncAt).toISOString().slice(11, 19)}Z.` : 'Workspace saved to your All Access account.';
+}
+
 // ------------------------------------------------------------------ paint
 function paint() {
   updateHealth();
   if (!S.member) return;
-  $('#nWatch').textContent = S.watch.size;
-  $('#nPins').textContent = `${S.pins.length}/${M.MAX_PINS}`;
+  const loaded = S.sync.ready || S.sync.pending > 0;
+  $('#nWatch').textContent = loaded ? S.watch.size : '…';
+  $('#nPins').textContent = loaded ? `${S.pins.length}/${M.MAX_PINS}` : '…';
+  paintSync();
   const na = $('#nAlerts'); na.textContent = S.unread; na.classList.toggle('has', S.unread > 0);
   const d = S.desks.get(S.scope);
   const events = d?.events || [];
@@ -484,17 +522,17 @@ function gate(state) {
     <a class="btn" href="${state === 'forbidden' ? 'https://propbetedge.ai/pro' : 'https://members.propbetedge.ai/'}">${state === 'forbidden' ? 'See All Access' : 'Member sign in'} ↗</a>`;
 }
 function lostAccess(status) {
+  sync.reset();
   S.member = null; S.desks.clear(); S.hist.clear(); S.live = null; S.snap.clear();
   closeDrawer(); gate(status === 401 ? 'anonymous' : 'forbidden');
 }
 
 // ------------------------------------------------------------------ events
-function toggleWatch(key) { if (S.watch.has(key)) S.watch.delete(key); else if (S.watch.size < M.MAX_WATCH) S.watch.add(key); saveIds(); paint(); }
+function toggleWatch(key) { if (!S.watch.has(key) && S.watch.size >= M.MAX_WATCH) return; sync.watch(key, !S.watch.has(key)); }
 function togglePin(key) {
-  const i = S.pins.indexOf(key);
-  if (i >= 0) S.pins.splice(i, 1);
-  else { if (S.pins.length >= M.MAX_PINS) S.pins.shift(); S.pins.push(key); const { e, c } = findContract(key); if (e && c) readHistory(e, c).then(paint); }
-  saveIds(); paint();
+  const on = !S.pins.includes(key);
+  sync.pin(key, on);
+  if (on) { const { e, c } = findContract(key); if (e && c) readHistory(e, c).then(paint); }
 }
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest('[data-act],[data-view],[data-filter],[data-close]');
@@ -509,7 +547,8 @@ document.addEventListener('click', (ev) => {
   else if (a === 'expand') { S.expanded.has(t.dataset.ev) ? S.expanded.delete(t.dataset.ev) : S.expanded.add(t.dataset.ev); paint(); }
   else if (a === 'retry') tick(true);
   else if (a === 'recheck') boot();
-  else if (a === 'prune') { for (const k of [...S.watch]) if (!findContract(k).c) S.watch.delete(k); saveIds(); paint(); }
+  else if (a === 'prune') { for (const k of [...S.watch]) if (!findContract(k).c) sync.watch(k, false); }
+  else if (a === 'sync-retry') sync.retryNow();
 });
 document.addEventListener('pointermove', (ev) => { if (ev.target.closest?.('rect[data-hover]')) onChartMove(ev); }, { passive: true });
 document.addEventListener('pointerout', (ev) => { if (ev.target.closest?.('rect[data-hover]')) onChartLeave(ev); }, { passive: true });
@@ -534,8 +573,12 @@ $('#sort').addEventListener('change', (ev) => { S.sort = ev.target.value; paint(
 let qT = 0;
 $('#q').addEventListener('input', (ev) => { clearTimeout(qT); qT = setTimeout(() => { S.q = ev.target.value; paint(); }, 120); });
 $('#refresh').addEventListener('click', () => tick(true));
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.member && Date.now() - S.lastOkAt > POLL_MS) tick(true); });
-addEventListener('online', () => { S.online = true; paint(); tick(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !S.member) return;
+  if (Date.now() - S.lastOkAt > POLL_MS) tick(true);
+  sync.refreshIfStale(30e3);
+});
+addEventListener('online', () => { S.online = true; paint(); tick(true); sync.retryNow(); });
 addEventListener('offline', () => { S.online = false; paint(); });
 
 // ------------------------------------------------------------------ boot
@@ -549,7 +592,9 @@ async function boot() {
   $('#who').textContent = S.member.role === 'owner' ? '◆ VERIFIED OWNER' : '◆ ALL ACCESS';
   $('#scope').value = S.scope;
   paint();
+  const ws = sync.load().then(() => { paint(); if (M.scopesFor([...S.watch, ...S.pins]).some((sc) => !M.covers(S.scope, sc) && !S.desks.get(sc))) tick(true); });
   await tick(true);
+  await ws;
   if (S.open) openDrawer(S.open);
 }
 boot();
