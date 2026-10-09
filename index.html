@@ -1,1 +1,96 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a101b"><title>PBE Terminal · PropBetEdge All Access</title><link rel="stylesheet" href="/style.css"></head><body><div class="app"><aside class="rail"><div class="brandmark">◆</div><a href="https://members.propbetedge.ai/" aria-label="Command Center">⌂</a><a href="https://compare.propbetedge.ai/" aria-label="Compare">⇄</a><a href="https://predictions.propbetedge.ai/" aria-label="Predictions">◉</a><div class="rail-end">PBE</div></aside><div class="workspace"><header class="topbar"><div class="identity"><strong>PROP<span>BET</span>EDGE</strong><span class="slash">/</span><b>TERMINAL</b><em>ALL ACCESS</em></div><nav><a href="https://members.propbetedge.ai/">Command Center ↗</a><a href="https://compare.propbetedge.ai/">Compare ↗</a></nav><div class="member" id="member">ACCESS CHECK</div></header><div class="statusline"><span class="pulse"></span><b>PBE MARKET INTELLIGENCE</b><span id="feedState">Initializing terminal</span><span class="right">KALSHI × POLYMARKET × PBE</span></div><main><div class="heading"><div><div class="eyebrow">PREMIUM RESEARCH WORKSPACE / V1</div><h1>Market Terminal<span class="gold">.</span></h1><p>Follow the markets. Interrogate the evidence. Move between venues without losing context.</p></div><div class="head-actions"><span class="clock" id="clock">--:--:-- UTC</span><button id="refresh" class="primary">↻ Refresh markets</button></div></div><div class="kpis"><div><small>VISIBLE CONTRACTS</small><strong id="contracts">—</strong><label>Current query only</label></div><div><small>MARKETS WITH QUOTES</small><strong id="quoted">—</strong><label>Available observation</label></div><div><small>RULE-ALIGNED PAIRS</small><strong id="aligned">—</strong><label>Verified comparison gate</label></div><div><small>MODEL SIGNALS</small><strong id="modeled">—</strong><label>Only when published</label></div></div><section class="tablepanel"><div class="tablehead"><div class="titleline"><strong>MARKET SCREENER</strong><span id="count">Awaiting entitlement</span></div><div class="controls"><input id="search" type="search" placeholder="Search contracts, teams or events" aria-label="Search markets"><select id="scope" aria-label="Market scope"><option value="sports">All sports</option><option value="nonsports">Predictions / macro</option><option value="nfl">NFL</option><option value="nba">NBA</option><option value="nhl">NHL</option><option value="mlb">MLB</option><option value="wnba">WNBA</option><option value="tennis">Tennis</option><option value="soccer">Soccer</option><option value="ufc">UFC</option><option value="golf">Golf</option><option value="f1">Formula 1</option></select><select id="filter" aria-label="Contract filter"><option value="all">All markets</option><option value="comparable">Rule-aligned only</option><option value="model">With PBE model</option><option value="quoted">Quoted only</option></select><button id="savedToggle">☆ Watchlist <span id="savedCount">0</span></button></div></div><div class="notice" id="notice">Checking membership. Protected prices will load only for All Access members.</div><div class="tablewrap"><table><thead><tr><th>EVENT / CONTRACT</th><th>VENUE</th><th>K MID</th><th>P MID</th><th>VERIFIED GAP</th><th>PBE MODEL</th><th>LAST OBSERVED</th><th></th></tr></thead><tbody id="rows"><tr><td colspan="8" class="empty">Awaiting entitlement verification…</td></tr></tbody></table></div><div class="footnote"><span id="coverage">Scope: capped source feed, not an exhaustive market list.</span><span>Quotes are observations, not executable guarantees · Fees and size vary</span></div></section><section class="bottomgrid"><article><small class="eyebrow">THE RESEARCH DIFFERENCE</small><h2>Two venues. One question. No invented certainty.</h2><p>Rule mismatches are never treated as price gaps. A missing PBE forecast remains missing. Every result carries a source time and can be inspected in Compare.</p></article><article><small class="eyebrow">DESIGNED FOR ALL ACCESS</small><h2>Independent from Markets.</h2><p>This dedicated workspace reuses the verified market-desk and membership contracts. Existing Markets, Compare, Predictions, and the Command Center remain separate products.</p></article></section></main><footer>PROPBETEDGE TERMINAL · RESEARCH ONLY · NO TRADE EXECUTION <span>MODEL DATA IS NOT INVESTMENT ADVICE</span></footer></div></div><div id="detail" class="detail" hidden><div class="detailBackdrop" id="closeBackdrop"></div><section class="drawer" role="dialog" aria-modal="true" aria-label="Contract details"><button id="close" class="close">✕ CLOSE</button><small class="eyebrow">CONTRACT INTELLIGENCE</small><h2 id="detailTitle">Market</h2><div id="detailBody"></div></section></div><script src="/app.js" type="module"></script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
+<meta name="robots" content="noindex">
+<title>PBE Terminal · PropBetEdge All Access</title>
+<meta name="description" content="PropBetEdge All Access market intelligence workspace: Kalshi and Polymarket side by side, rule evidence, watchlists and in-app alerts. Read-only research.">
+<link rel="icon" href="https://propbetedge.ai/logo/pbe-mark-80.png">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<a class="skip" href="#workspace">Skip to workspace</a>
+<header class="top">
+  <a class="brand" href="https://members.propbetedge.ai/" aria-label="PropBetEdge Command Center">
+    <img src="https://propbetedge.ai/logo/pbe-mark-80.png" width="40" height="17" alt="">
+    <span><b>PropBet<em>Edge</em></b><small>TERMINAL · ALL ACCESS</small></span>
+  </a>
+  <nav class="top-links" aria-label="PropBetEdge products">
+    <a href="https://members.propbetedge.ai/">Command Center</a>
+    <a href="https://compare.propbetedge.ai/">Compare</a>
+    <a href="https://predictions.propbetedge.ai/">Predictions</a>
+  </nav>
+  <div class="top-right">
+    <span class="clock" id="clock" aria-label="Current UTC time">--:--:-- UTC</span>
+    <span class="who" id="who">ACCESS CHECK</span>
+  </div>
+</header>
+
+<div class="status" id="status">
+  <span class="feed" id="feed" data-state="CONNECTING"><i aria-hidden="true"></i><b>CONNECTING</b></span>
+  <span id="feedText" role="status" aria-live="polite">Verifying All Access membership</span>
+  <span class="status-r" id="feedAge"></span>
+</div>
+
+<main id="workspace" tabindex="-1">
+  <section class="gate" id="gate" hidden></section>
+
+  <div id="app" hidden>
+    <div class="head">
+      <div>
+        <p class="eyebrow">KALSHI × POLYMARKET × PBE · READ-ONLY RESEARCH</p>
+        <h1>Market Terminal</h1>
+      </div>
+      <div class="kpis" id="kpis" aria-label="Board summary"></div>
+    </div>
+
+    <div class="bar">
+      <div class="tabs" role="tablist" aria-label="Workspace views">
+        <button role="tab" id="tab-board" data-view="board" aria-selected="true" aria-controls="view">Board</button>
+        <button role="tab" id="tab-watch" data-view="watch" aria-selected="false" aria-controls="view">Watch<span class="lg">list</span> <span class="n" id="nWatch">0</span></button>
+        <button role="tab" id="tab-pins" data-view="pins" aria-selected="false" aria-controls="view"><span class="lg">Side by side</span><span class="sm">Pins</span> <span class="n" id="nPins">0/4</span></button>
+        <button role="tab" id="tab-alerts" data-view="alerts" aria-selected="false" aria-controls="view">Alerts <span class="n alert-n" id="nAlerts">0</span></button>
+      </div>
+      <div class="ctl">
+        <label class="sr" for="scope">Market scope</label>
+        <select id="scope">
+          <option value="sports">All sports</option><option value="nonsports">Prediction markets</option>
+          <option value="nfl">NFL</option><option value="nba">NBA</option><option value="nhl">NHL</option><option value="mlb">MLB</option>
+          <option value="wnba">WNBA</option><option value="soccer">Soccer</option><option value="tennis">Tennis</option>
+          <option value="ufc">UFC</option><option value="golf">Golf</option><option value="f1">Formula 1</option>
+        </select>
+        <label class="sr" for="sort">Sort</label>
+        <select id="sort">
+          <option value="priority">Live + closing first</option><option value="gap">Largest verified gap</option>
+          <option value="move">Biggest observed move</option><option value="start">Start / close time</option>
+        </select>
+        <label class="sr" for="q">Search markets</label>
+        <input id="q" type="search" placeholder="Search teams, players, markets  ( / )" autocomplete="off">
+        <button id="refresh" class="ghost" title="Read the market desk now">↻<span class="sr"> Refresh</span></button>
+      </div>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Filter markets"></div>
+
+    <section id="view" role="tabpanel" aria-labelledby="tab-board"></section>
+
+    <p class="fine">Quotes are stored venue observations with their timestamps, before fees; not executable guarantees. A gap is shown only when Compare has approved both contracts as comparable and the two quotes were observed within 120 s. A PBE probability appears only where a published same-contract model exists. Terminal is read-only: no trading, no account actions. Not investment advice.</p>
+  </div>
+</main>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-bg" data-close></div>
+  <section class="drawer-in" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="drawer-top"><p class="eyebrow">MARKET EVIDENCE</p><button class="close" data-close>Close <span aria-hidden="true">✕</span></button></div>
+    <div id="dBody"></div>
+  </section>
+</div>
+
+<footer class="foot">
+  <span>PROPBETEDGE TERMINAL · RESEARCH ONLY · NO TRADE EXECUTION</span>
+  <span>Entertainment purposes only · 21+ · Gambling problem? 1-800-GAMBLER</span>
+</footer>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
