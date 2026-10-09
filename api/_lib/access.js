@@ -58,3 +58,15 @@ export async function compareRead(route,cookie,fetchImpl=fetch){
   const body=await response.json().catch(()=>null);
   return {status:response.status,body};
 }
+
+// One read-only Compare route behind Terminal's own access check. Compare re-checks the same session; a Compare
+// 401/403 after Terminal said entitled means the two authorities disagree -> 503 (never shown as "not a member").
+export async function compareProxy(req,res,route,unavailable,fetchImpl=fetch){
+  const auth=await requireAccess(req,res);if(!auth)return;
+  try{
+    const upstream=await compareRead(route,auth.cookie,fetchImpl);
+    if(upstream.status===401||upstream.status===403)return send(res,503,{error:'shared_access_verification_failed'});
+    if(upstream.body===null)return send(res,502,{error:unavailable});
+    return send(res,upstream.status,upstream.body);
+  }catch{return send(res,502,{error:unavailable});}
+}
